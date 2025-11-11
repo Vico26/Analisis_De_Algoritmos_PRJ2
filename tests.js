@@ -1,15 +1,14 @@
 // /arkanoid-ga/tests.js
-// UI: correr GA, pausar, exportar artifacts, y demo del mejor en canvas (1× por defecto).
+// UI + demo con evolve() real. Sin validaciones ni export. Log incluye bricks destruidos.
 import { Arkanoid, ArkanoidConfig } from './game.js';
 import { evolve, Policy } from './ga.js';
 
 const ui = {
   btnStart: document.getElementById('btnStart'),
   btnPause: document.getElementById('btnPause'),
-  btnExportBest: document.getElementById('btnExportBest'),
-  btnExportCSV: document.getElementById('btnExportCSV'),
   btnDemo: document.getElementById('btnDemo'),
   selSpeed: document.getElementById('inSpeed'),
+  chkAutoDemo: document.getElementById('chkAutoDemo'),
   mGen: document.getElementById('mGen'),
   mBest: document.getElementById('mBest'),
   mAvg: document.getElementById('mAvg'),
@@ -32,12 +31,16 @@ const ui = {
 let latest = { best: null, bestFit: -Infinity, history: [], cfg: null, seed: 0, opts: null };
 let pausedToggleFn = null;
 let running = false;
-let logsRows = [["gen","best","avg"]];
+let autoDemoEnabled = true;
+let demoRunning = false;
+let demoRAF = null;
 
-function logLine(s) {
-  ui.log.textContent += s + "\n";
-  ui.log.scrollTop = ui.log.scrollHeight;
-}
+ui.chkAutoDemo.addEventListener('change', () => {
+  autoDemoEnabled = ui.chkAutoDemo.checked;
+  logLine(`Demo automático: ${autoDemoEnabled ? 'ACTIVADO' : 'DESACTIVADO'}`);
+});
+
+function logLine(s) { ui.log.textContent += s + "\n"; ui.log.scrollTop = ui.log.scrollHeight; }
 
 function parseInputs() {
   const i = ui.inputs;
@@ -48,94 +51,97 @@ function parseInputs() {
   };
 }
 
-function downloadFile(name, text, type = 'text/plain') {
-  const blob = new Blob([text], { type });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-}
+function getSpeed() { return Math.max(1, parseInt(ui.selSpeed.value, 10) || 1); }
 
-function toCSV(rows) {
-  return rows.map(r => r.map(v => (""+v).includes(",") ? `"${(""+v).replace(/"/g,'""')}"` : v).join(",")).join("\n");
-}
-
-ui.btnStart.addEventListener('click', async () => {
-  if (running) return;
-  running = true;
-  ui.log.textContent = "";
-  logsRows = [["gen","best","avg"]];
-  ui.mGen.textContent = ui.mBest.textContent = ui.mAvg.textContent = "-";
-
-  const opts = parseInputs();
-  latest.opts = opts;
-  logLine(`Start GA: N=${opts.N}, G=${opts.G}, k=${opts.k}, pc=${opts.pCross}, pm=${opts.pMut}, elit=${opts.elit}, episodes=${opts.episodes}, T=${opts.T}, seed=${opts.seed}`);
-
-  await evolve(opts, {
-    onPauseChange: (register) => { pausedToggleFn = register; },
-    onGen: ({ gen, best, avg, globalBest, globalBestFit }) => {
-      ui.mGen.textContent = gen;
-      ui.mBest.textContent = best.toFixed(2);
-      ui.mAvg.textContent = avg.toFixed(2);
-      logsRows.push([gen, best.toFixed(4), avg.toFixed(4)]);
-      latest.best = globalBest; latest.bestFit = globalBestFit;
-      logLine(`gen ${gen}: best=${best.toFixed(2)} avg=${avg.toFixed(2)} globalBest=${globalBestFit.toFixed(2)}`);
-    },
-    onDone: ({ best, bestFit, history, cfg, seed, opts }) => {
-      running = false;
-      latest.best = best; latest.bestFit = bestFit; latest.history = history; latest.cfg = cfg; latest.seed = seed; latest.opts = opts;
-      logLine(`DONE. globalBest=${bestFit.toFixed(2)} weights=[${best.weights.map(v=>v.toFixed(3)).join(", ")}], dz=${best.deadzone.toFixed(3)}`);
-    }
-  });
-});
-
-ui.btnPause.addEventListener('click', () => { if (pausedToggleFn) pausedToggleFn(); });
-
-ui.btnExportBest.addEventListener('click', () => {
-  if (!latest.best) { logLine("No hay best aún."); return; }
-  const payload = {
-    weights: latest.best.weights,
-    deadzone: latest.best.deadzone,
-    bestFit: latest.bestFit,
-    seed: latest.seed,
-    opts: latest.opts
-  };
-  downloadFile(`best_seed${latest.seed}.json`, JSON.stringify(payload, null, 2), 'application/json');
-  logLine("best.json exportado.");
-});
-
-ui.btnExportCSV.addEventListener('click', () => {
-  if (logsRows.length <= 1) { logLine("No hay logs."); return; }
-  downloadFile(`logs_seed${(latest.opts?.seed??0)}.csv`, toCSV(logsRows), 'text/csv');
-  logLine("logs.csv exportado.");
-});
-
-// --- Demo del mejor en canvas (1× por defecto; selector 1×/3×/5×) ---
-let demo = { running: false, raf: 0 };
-
-ui.btnDemo.addEventListener('click', () => {
-  if (!latest.best) { logLine("Corre GA primero para obtener un best."); return; }
-  if (demo.running) cancelAnimationFrame(demo.raf);
+function runDemo(policy, genNumber = 'INICIAL') {
+  if (demoRunning && demoRAF) { cancelAnimationFrame(demoRAF); demoRunning = false; }
 
   const cfg = new ArkanoidConfig();
-  const env = new Arkanoid(cfg, (latest.seed ^ 0xA5A5A5A5) >>> 0);
+  const baseSeed = typeof genNumber === "number" ? genNumber : 1234;
+  const env = new Arkanoid(cfg, (1234 + baseSeed) >>> 0);
   const ctx = ui.cv.getContext('2d');
-  const pol = new Policy(latest.best.weights, latest.best.deadzone);
-  demo.running = true;
+
+  demoRunning = true;
+  env.reset((1234 + baseSeed) >>> 0);
 
   const loop = () => {
-    const stepsPerFrame = Math.max(1, (parseInt(ui.selSpeed.value, 10) || 1)); // 1× por defecto
-    for (let i = 0; i < stepsPerFrame; i++) {
-      const a = pol.act(env.observe());
-      env.step(a);
-      if (env.done) break;
-    }
-    env.render(ctx);
-    ui.hud.textContent = `score=${env.score} lives=${env.lives} speed=${stepsPerFrame}×`;
-    if (!env.done) demo.raf = requestAnimationFrame(loop);
-    else demo.running = false;
+    if (!demoRunning) return;
+    try {
+      const steps = getSpeed();
+      for (let i = 0; i < steps; i++) {
+        if (!env.done) {
+          const action = policy.act(env.observe());
+          env.step(action);
+        } else {
+          env.reset(((1234 + baseSeed + Math.floor(Math.random() * 1000)) >>> 0));
+        }
+      }
+      ctx.clearRect(0, 0, cfg.width, cfg.height);
+      env.render(ctx);
+      const destroyed = env.bricksAlive.filter(b => !b).length;
+      const total = env.bricksAlive.length;
+      ui.hud.textContent = `GEN ${genNumber} | Score: ${env.score} Lives: ${env.lives} Bricks: ${destroyed}/${total}`;
+    } catch (err) { console.error('Error en demo:', err); }
+    demoRAF = requestAnimationFrame(loop);
   };
+
   loop();
+  logLine(`Demo gen ${genNumber} iniciado`);
+}
+
+// Demo inicial
+window.addEventListener('load', () => {
+  const simplePolicy = new Policy([0.5, -0.3, 0.2, -0.1, 0.6, 0, 0.1, 0.2], 0.15);
+  runDemo(simplePolicy, 'INICIAL');
+});
+
+// START: evolve() real (sin validaciones)
+ui.btnStart.addEventListener('click', async () => {
+  if (running) return;
+  const opts = parseInputs();
+
+  running = true;
+  ui.log.textContent = "";
+  ui.mGen.textContent = ui.mBest.textContent = ui.mAvg.textContent = "-";
+  latest.opts = opts; latest.seed = opts.seed;
+
+  logLine(`=== INICIANDO ALGORITMO GENÉTICO ===`);
+  logLine(`Params: N=${opts.N}, G=${opts.G}, k=${opts.k}, pc=${opts.pCross}, pm=${opts.pMut}`);
+
+  try {
+    await evolve(opts, {
+      onPauseChange: (fn) => { pausedToggleFn = fn; },
+      onGen: ({ gen, best, avg, bestInd, globalBest, globalBestFit, destroyed, totalBricks }) => {
+        ui.mGen.textContent = gen;
+        ui.mBest.textContent = best.toFixed(2);
+        ui.mAvg.textContent = avg.toFixed(2);
+        latest.best = bestInd; latest.bestFit = globalBestFit;
+        logLine(`Gen ${gen}: mejor=${best.toFixed(2)} avg=${avg.toFixed(2)} bricks=${destroyed}/${totalBricks}`);
+        if (autoDemoEnabled && bestInd) runDemo(bestInd, gen);
+      },
+      onDone: ({ best, bestFit, history, cfg, seed }) => {
+        latest.best = best; latest.bestFit = bestFit; latest.history = history; latest.cfg = cfg; latest.seed = seed;
+        logLine(`=== EVOLUCIÓN COMPLETADA ===`);
+        logLine(`Mejor fitness: ${bestFit.toFixed(2)}`);
+        if (autoDemoEnabled && best) runDemo(best, 'MEJOR GLOBAL');
+      }
+    });
+  } catch (err) {
+    logLine(`ERROR: ${err.message || err}`);
+  } finally {
+    running = false;
+  }
+});
+
+// Pause
+ui.btnPause.addEventListener('click', () => {
+  if (typeof pausedToggleFn === 'function') { pausedToggleFn(); logLine("Toggle de pausa enviado al GA."); }
+  else { logLine("Pausa no disponible aún. Inicia el GA primero."); }
+});
+
+// Demo manual del mejor global
+ui.btnDemo.addEventListener('click', () => {
+  if (!latest.best) { logLine("Ejecuta el GA primero para obtener un mejor agente."); return; }
+  runDemo(latest.best, 'MEJOR GLOBAL');
+  logLine("Demo del mejor agente global iniciado.");
 });

@@ -1,5 +1,5 @@
 // /arkanoid-ga/game.js
-// Motor Arkanoid minimal: estado, step(), observe(), render() opcional.
+// Motor Arkanoid minimal: estado, step(), observe(), render().
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -41,7 +41,7 @@ export class Arkanoid {
     const c = this.cfg;
     this.px = c.width / 2 - c.paddle_w / 2;
     this.py = c.paddle_y;
-    const angle = (Math.PI / 4) + this.rng() * (Math.PI / 2); // evita vertical
+    const angle = (Math.PI / 4) + this.rng() * (Math.PI / 2);
     const spd = c.ball_spd;
     this.bx = c.width / 2; this.by = c.height * 0.6;
     this.bdx = Math.cos(angle) * spd; this.bdy = -Math.abs(Math.sin(angle) * spd);
@@ -74,23 +74,25 @@ export class Arkanoid {
   }
 
   step(action) {
-    // Por qué: recompensa densa mantiene señal útil para el GA.
     if (this.done) return { reward: 0, done: true };
+
     const c = this.cfg;
     this.px += c.paddle_spd * (action || 0);
     this.px = clamp(this.px, 0, c.width - c.paddle_w);
 
-    this.bx += this.bdx; this.by += this.bdy;
-    let reward = 0.01; // sobrevivir
+    this.bx += this.bdx;
+    this.by += this.bdy;
+    let reward = 0.01;
 
-    // Paredes
     if (this.bx <= c.ball_r || this.bx >= c.width - c.ball_r) this.bdx = -this.bdx;
     if (this.by <= c.ball_r) this.bdy = -this.bdy;
 
-    // Paleta
-    const hitPaddle = (this.py - c.ball_r - 1) <= this.by && this.by <= (this.py + c.paddle_h) &&
-                      (this.px - c.ball_r) <= this.bx && this.bx <= (this.px + c.paddle_w + c.ball_r) &&
+    const hitPaddle = (this.py - c.ball_r - 1) <= this.by &&
+                      this.by <= (this.py + c.paddle_h) &&
+                      (this.px - c.ball_r) <= this.bx &&
+                      this.bx <= (this.px + c.paddle_w + c.ball_r) &&
                       this.bdy > 0;
+
     if (hitPaddle) {
       const hit_pos = (this.bx - (this.px + c.paddle_w / 2)) / (c.paddle_w / 2);
       this.bdy = -Math.abs(this.bdy);
@@ -98,7 +100,6 @@ export class Arkanoid {
       reward += 0.2;
     }
 
-    // Ladrillos
     for (let i = 0; i < this.bricksAlive.length; i++) {
       if (!this.bricksAlive[i]) continue;
       const [x, y, w, h] = this._brickRect(i);
@@ -107,50 +108,66 @@ export class Arkanoid {
         this.bricksAlive[i] = false;
         this.score += 1;
         reward += 10.0;
-        this.bdy = -this.bdy; // rebote simple estable
+        this.bdy = -this.bdy;
         break;
       }
     }
 
-    // Caída
+    const allBricksDestroyed = this.bricksAlive.every(brick => !brick);
+    if (allBricksDestroyed) {
+      this.done = true;
+      reward += 50.0;
+      return { reward, done: true };
+    }
+
     if (this.by >= c.height - c.ball_r) {
       this.lives -= 1;
       reward -= 3.0;
       if (this.lives <= 0) {
         this.done = true;
+        reward -= 10.0;
       } else {
         const angle = (Math.PI / 4) + this.rng() * (Math.PI / 2);
-        this.bx = c.width / 2; this.by = c.height * 0.6;
-        this.bdx = Math.cos(angle) * c.ball_spd; this.bdy = -Math.abs(Math.sin(angle) * c.ball_spd);
+        this.bx = c.width / 2;
+        this.by = c.height * 0.6;
+        this.bdx = Math.cos(angle) * c.ball_spd;
+        this.bdy = -Math.abs(Math.sin(angle) * c.ball_spd);
       }
     }
 
     this.t += 1;
-    if (this.t >= c.horizonT) this.done = true;
+
+    if (this.t >= c.horizonT) {
+      this.done = true;
+      const progress = this.bricksAlive.filter(brick => !brick).length / this.bricksAlive.length;
+      reward += progress * 20.0;
+    }
 
     return { reward, done: this.done };
   }
 
   render(ctx) {
     const c = this.cfg;
-    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = "#0b0c10";
+    ctx.fillRect(0, 0, c.width, c.height);
 
-    // Paleta
-    ctx.fillStyle = "#9aa3b2";
-    ctx.fillRect(this.px, this.py, c.paddle_w, c.paddle_h);
-
-    // Bola
-    ctx.beginPath();
-    ctx.arc(this.bx, this.by, c.ball_r, 0, Math.PI * 2);
-    ctx.fillStyle = "#e8eaf1";
-    ctx.fill();
-
-    // Ladrillos
     ctx.fillStyle = "#7dd3fc";
     for (let i = 0; i < this.bricksAlive.length; i++) {
       if (!this.bricksAlive[i]) continue;
       const [x, y, w, h] = this._brickRect(i);
       ctx.fillRect(x, y, w, h);
     }
+
+    ctx.fillStyle = "#9aa3b2";
+    ctx.fillRect(this.px, this.py, c.paddle_w, c.paddle_h);
+
+    ctx.beginPath();
+    ctx.arc(this.bx, this.by, c.ball_r, 0, Math.PI * 2);
+    ctx.fillStyle = "#e8eaf1";
+    ctx.fill();
+
+    ctx.fillStyle = "#e8eaf1";
+    ctx.font = "12px monospace";
+    ctx.fillText(`Score: ${this.score} Lives: ${this.lives}`, 10, 20);
   }
 }

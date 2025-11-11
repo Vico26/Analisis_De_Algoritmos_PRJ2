@@ -14,7 +14,6 @@
     h2{font-size:15px;margin:12px 0 6px;color:var(--muted)}
     label{font-size:12px;color:var(--muted)}
     input,button,select{background:#20232b;border:1px solid #2b303b;color:var(--text);padding:8px;border-radius:10px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
@@ -23,6 +22,7 @@
     .log{height:140px;overflow:auto;background:#20232b;border:1px solid #2b303b;border-radius:10px;padding:8px;white-space:pre}
     canvas{border-radius:12px;border:1px solid #2b303b;background:#0b0c10;image-rendering:pixelated}
     .small{font-size:12px;color:var(--muted)}
+    .checkbox-label { display:flex;align-items:center;gap:6px;font-size:12px;}
   </style>
 </head>
 <body>
@@ -33,39 +33,43 @@
 
       <h2>Parámetros</h2>
       <div class="row3">
-        <div><label>Población</label><input id="inN" type="number" value="30" min="10"></div>
-        <div><label>Generaciones</label><input id="inG" type="number" value="60" min="10"></div>
-        <div><label>Torneo k</label><input id="inK" type="number" value="3" min="2"></div>
-        <div><label>pCruce</label><input id="inPc" type="number" value="0.7" step="0.05" min="0" max="1"></div>
-        <div><label>pMut</label><input id="inPm" type="number" value="0.1" step="0.01" min="0" max="1"></div>
-        <div><label>Elitismo</label><input id="inElit" type="number" value="2" min="0"></div>
-        <div><label>Episodios</label><input id="inEpisodes" type="number" value="2" min="1"></div>
-        <div><label>Horizonte T</label><input id="inT" type="number" value="5000" min="500"></div>
-        <div><label>Semilla</label><input id="inSeed" type="number" value="1234"></div>
+        <div><label for="inN">Población</label><input id="inN" type="number" value="30"></div>
+        <div><label for="inG">Generaciones</label><input id="inG" type="number" value="60"></div>
+        <div><label for="inK">Torneo k</label><input id="inK" type="number" value="3"></div>
+        <div><label for="inPc">pCruce</label><input id="inPc" type="number" value="0.7"></div>
+        <div><label for="inPm">pMut</label><input id="inPm" type="number" value="0.1"></div>
+        <div><label for="inElit">Elitismo</label><input id="inElit" type="number" value="2"></div>
+        <div><label for="inEpisodes">Episodios</label><input id="inEpisodes" type="number" value="2"></div>
+        <div><label for="inT">Horizonte T</label><input id="inT" type="number" value="5000"></div>
+        <div><label for="inSeed">Semilla</label><input id="inSeed" type="number" value="1234"></div>
       </div>
 
       <div class="controls">
-        <button id="btnStart">Start GA</button>
-        <button id="btnPause">Pause</button>
-        <button id="btnExportBest">Export best.json</button>
-        <button id="btnExportCSV">Export logs.csv</button>
+        <button id="btnStart" type="button">Start GA</button>
+        <button id="btnPause" type="button">Pause</button>
       </div>
 
-      <div class="metrics">
+      <div class="controls">
+        <label class="checkbox-label">
+          <input type="checkbox" id="chkAutoDemo" checked> Demo automático
+        </label>
+      </div>
+
+      <div class="metrics" aria-live="polite">
         <div class="metric"><b>Gen</b><span id="mGen">-</span></div>
         <div class="metric"><b>Mejor</b><span id="mBest">-</span></div>
         <div class="metric"><b>Promedio</b><span id="mAvg">-</span></div>
       </div>
 
       <h2>Log</h2>
-      <div id="log" class="log"></div>
+      <div id="log" class="log" aria-live="polite"></div>
     </div>
 
     <div class="panel">
       <h2>Demo (mejor individuo)</h2>
       <div class="controls">
-        <button id="btnDemo">Demo best</button>
-        <label>Velocidad</label>
+        <button id="btnDemo" type="button">Demo best</button>
+        <label for="inSpeed">Velocidad</label>
         <select id="inSpeed">
           <option value="1" selected>1× (real)</option>
           <option value="3">3×</option>
