@@ -1,5 +1,5 @@
 // /arkanoid-ga/ga.js
-// AG no bloqueante + logging de ladrillos destruidos por generación.
+// AG con fitness que empuja a terminar + señales del mejor GLOBAL.
 import { Arkanoid, ArkanoidConfig, mulberry32, clamp } from './game.js';
 
 export class Policy {
@@ -19,23 +19,28 @@ export function evaluate(policy, cfg, seed, episodes = 2, T = 5000) {
   let totalFitness = 0;
   for (let ep = 0; ep < episodes; ep++) {
     const env = new Arkanoid(cfg, (seed + ep * 1000) >>> 0);
-    let episodeReward = 0, steps = 0;
+    let episodeReward = 0;
     for (let t = 0; t < T; t++) {
       const action = policy.act(env.observe());
       const { reward, done } = env.step(action);
-      episodeReward += reward; steps++; if (done) break;
+      episodeReward += reward;
+      if (done) break;
     }
     const destroyed = env.bricksAlive.filter(b => !b).length;
     const totalBricks = env.bricksAlive.length;
     const livesLeft = env.lives;
     const progress = destroyed / totalBricks;
-    const fitness = (destroyed * 20) + (episodeReward * 5) + (livesLeft * 15) + (progress * 10) + (steps * 0.01);
+    const allBricksDestroyed = destroyed === totalBricks;
+
+    // Fitness que prioriza terminar (sin steps)
+    let fitness = (destroyed * 30) + (episodeReward * 5) + (livesLeft * 10) + (progress * 50);
+    if (allBricksDestroyed) fitness += 2000; // bonus fuerte por limpiar
     totalFitness += fitness;
   }
   return totalFitness / episodes;
 }
 
-// Episodio rápido para contar ladrillos destruidos (solo logging)
+// Episodio rápido para logging de bricks
 function episodeDestroyed(policy, cfg, seed, T = 5000) {
   const env = new Arkanoid(cfg, seed >>> 0);
   for (let t = 0; t < T; t++) {
@@ -110,6 +115,7 @@ export async function evolve(opts, hooks = {}) {
 
   let pop = initPopulation(N, rng, ranges);
   let globalBest = null, globalBestFit = -Infinity;
+  let globalBestGen = -1, globalBestIdx = -1;
   const history = [];
 
   let paused = false;
@@ -129,12 +135,28 @@ export async function evolve(opts, hooks = {}) {
     for (let i = 0; i < fits.length; i++) { if (fits[i] > fits[bestIdx]) bestIdx = i; sum += fits[i]; }
     const bestFit = fits[bestIdx], avgFit = sum / fits.length, bestInd = pop[bestIdx];
 
-    if (bestFit > globalBestFit) { globalBestFit = bestFit; globalBest = new Policy(bestInd.weights, bestInd.deadzone); }
+    let isNewGlobal = false;
+    if (bestFit > globalBestFit) {
+      globalBestFit = bestFit;
+      globalBest = new Policy(bestInd.weights, bestInd.deadzone);
+      globalBestGen = gen;
+      globalBestIdx = bestIdx;
+      isNewGlobal = true;
+    }
 
     const { destroyed, total } = episodeDestroyed(bestInd, cfg, (seed + gen * 1000 + bestIdx) >>> 0, T);
 
     history.push({ gen, best: bestFit, avg: avgFit });
-    hooks.onGen && hooks.onGen({ gen, best: bestFit, avg: avgFit, bestInd, globalBest, globalBestFit, destroyed, totalBricks: total });
+
+    hooks.onGen && hooks.onGen({
+      gen, best: bestFit, avg: avgFit,
+      bestInd, bestIdx,
+      destroyed, totalBricks: total,
+      // Global tracking
+      isNewGlobal,
+      globalBest, globalBestFit, globalBestGen, globalBestIdx,
+      globalEvalSeed: (seed + gen * 1000 + bestIdx) >>> 0
+    });
 
     const nextPop = [];
     const sorted = [...fits.keys()].sort((a, b) => fits[b] - fits[a]);
@@ -151,7 +173,8 @@ export async function evolve(opts, hooks = {}) {
     await new Promise(r => setTimeout(r, 0));
   }
 
-  const result = { best: globalBest, bestFit: globalBestFit, history, cfg, seed, opts };
+  const result = { best: globalBest, bestFit: globalBestFit, history, cfg, seed, opts,
+                   globalBestGen, globalBestIdx };
   hooks.onDone && hooks.onDone(result);
   return result;
 }
