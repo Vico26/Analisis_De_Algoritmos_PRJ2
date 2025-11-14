@@ -68,8 +68,12 @@ function parseInputs() {
   const i = ui.inputs;
   return {
     N: +i.N.value, G: +i.G.value, k: +i.k.value,
-    pCross: +i.pc.value, pMut: +i.pm.value, elit: +i.elit.value,
-    episodes: +i.episodes.value, T: +i.T.value, seed: (+i.seed.value) >>> 0
+    pCross: +i.pc.value, 
+    pMut: +i.pm.value, 
+    elit: +i.elit.value,
+    episodes: +i.episodes.value, 
+    T: +i.T.value, 
+    seed: (+i.seed.value) >>> 0
   };
 }
 
@@ -114,7 +118,11 @@ function runDemo(initialPolicy, label, seed) {
       currentDemoEnv.render(ctx);
       const destroyed = currentDemoEnv.bricksAlive.filter(b => !b).length;
       const total = currentDemoEnv.bricksAlive.length;
-      ui.hud.textContent = `GEN ${currentDemoGen} | Score: ${currentDemoEnv.score} Lives: ${currentDemoEnv.lives} Bricks: ${destroyed}/${total}`;
+      ui.hud.textContent = `GEN ${currentDemoGen} | 
+      Score: ${currentDemoEnv.score} 
+      Lives: ${currentDemoEnv.lives} 
+      Bricks: ${destroyed}/${total}`;
+
     } catch (err) { console.error('Error en demo:', err); }
     demoRAF = requestAnimationFrame(loop);
   };
@@ -142,7 +150,9 @@ ui.btnStart.addEventListener('click', async () => {
   ui.log.textContent = "";
   ui.mGen.textContent = ui.mBest.textContent = ui.mAvg.textContent = "-";
   latest.opts = opts; latest.seed = opts.seed;
-  latest.globalBest = null; latest.globalBestFit = -Infinity; latest.globalBestGen = -1; latest.globalBestIdx = -1; latest.globalEvalSeed = 0;
+  latest.globalBest = null; latest.globalBestFit = -Infinity; 
+  latest.globalBestGen = -1; latest.globalBestIdx = -1; 
+  latest.globalEvalSeed = 0;
   latest.nextCandidateGlobal = null;
 
   logLine(`=== INICIANDO ALGORITMO GENÉTICO ===`);
@@ -151,11 +161,14 @@ ui.btnStart.addEventListener('click', async () => {
   try {
     await evolve(opts, {
       onPauseChange: fn => { pausedToggleFn = fn; },
-      onGen: ({ gen, best, avg, destroyed, totalBricks, isNewGlobal, globalBest, globalBestFit, globalBestGen, globalBestIdx, globalEvalSeed }) => {
+      onGen: ({ gen, best, avg, destroyed, totalBricks, isNewGlobal, 
+        globalBest, globalBestFit, globalBestGen, globalBestIdx, globalEvalSeed }) => 
+          {
         ui.mGen.textContent = gen;
         ui.mBest.textContent = best.toFixed(2);
         ui.mAvg.textContent = avg.toFixed(2);
-        logLine(`Gen ${gen}: mejor=${best.toFixed(2)} avg=${avg.toFixed(2)} bricks=${destroyed}/${totalBricks}`);
+        logLine(`Gen ${gen}: mejor=${best.toFixed(2)} avg=${avg.toFixed(2)} 
+        bricks=${destroyed}/${totalBricks}`);
 
         if (isNewGlobal) {
           latest.globalBest = globalBest;
@@ -174,7 +187,9 @@ ui.btnStart.addEventListener('click', async () => {
                 currentDemoGen = `GLOBAL g${globalBestGen}`;
               } else {
                 // guardar para aplicar cuando termine
-                latest.nextCandidateGlobal = { policy: globalBest, label: `GLOBAL g${globalBestGen}`, seed: globalEvalSeed };
+                latest.nextCandidateGlobal = { policy: globalBest, 
+                  label: `GLOBAL g${globalBestGen}`, 
+                  seed: globalEvalSeed };
                 logLine(`(esperando fin: quedan ${left} ladrillos)`);
               }
             }
@@ -182,12 +197,17 @@ ui.btnStart.addEventListener('click', async () => {
         }
       },
       onDone: ({ best, bestFit, history, cfg, seed }) => {
-        latest.best = best; latest.bestFit = bestFit; latest.history = history; latest.cfg = cfg; latest.seed = seed;
+        latest.best = best; latest.bestFit = bestFit; 
+        latest.history = history; latest.cfg = cfg; 
+        latest.seed = seed;
+
         logLine(`=== EVOLUCIÓN COMPLETADA ===`);
         logLine(`Mejor fitness global: ${bestFit.toFixed(2)}`);
+
         // Si no hubo demo, arrancar con el global final
         if (autoDemoEnabled && !demoRunning && latest.globalBest) {
-          runDemo(latest.globalBest, `GLOBAL g${latest.globalBestGen}`, latest.globalEvalSeed || (seed >>> 0));
+          runDemo(latest.globalBest, `GLOBAL g${latest.globalBestGen}`, 
+            latest.globalEvalSeed || (seed >>> 0));
         }
       }
     });
@@ -199,8 +219,10 @@ ui.btnStart.addEventListener('click', async () => {
 });
 
 ui.btnPause.addEventListener('click', () => {
-  if (typeof pausedToggleFn === 'function') { pausedToggleFn(); logLine("Toggle de pausa enviado al GA."); }
-  else { logLine("Pausa no disponible aún. Inicia el GA primero."); }
+  if (typeof pausedToggleFn === 'function') { 
+    pausedToggleFn(); logLine("Toggle de pausa enviado al GA."); }
+  else { 
+    logLine("Pausa no disponible aún. Inicia el GA primero."); }
 });
 
 // Demo manual del mejor global (reproduce semilla de evaluación)
