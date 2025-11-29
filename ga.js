@@ -1,12 +1,14 @@
 // /arkanoid-ga/ga.js
-// AG con fitness que empuja a terminar + señales del mejor GLOBAL.
 import { Arkanoid, ArkanoidConfig, mulberry32, clamp } from './game.js';
+
+const TIME_W = 0.05;
 
 export class Policy {
   constructor(weights, deadzone) {
     this.weights = weights.slice(0, 8);
     this.deadzone = deadzone;
   }
+  
   act(features) {
     let y = 0;
     for (let i = 0; i < 8; i++) y += this.weights[i] * features[i];
@@ -20,27 +22,29 @@ export function evaluate(policy, cfg, seed, episodes = 2, T = 5000) {
   for (let ep = 0; ep < episodes; ep++) {
     const env = new Arkanoid(cfg, (seed + ep * 1000) >>> 0);
     let episodeReward = 0;
+    let stepsAlive = 0;
+    
     for (let t = 0; t < T; t++) {
       const action = policy.act(env.observe());
       const { reward, done } = env.step(action);
       episodeReward += reward;
+      stepsAlive++;
       if (done) break;
     }
+    
     const destroyed = env.bricksAlive.filter(b => !b).length;
     const totalBricks = env.bricksAlive.length;
     const livesLeft = env.lives;
     const progress = destroyed / totalBricks;
     const allBricksDestroyed = destroyed === totalBricks;
 
-    // Fitness que prioriza terminar (sin steps)
-    let fitness = (destroyed * 30) + (episodeReward * 5) + (livesLeft * 10) + (progress * 50);
-    if (allBricksDestroyed) fitness += 2000; // bonus fuerte por limpiar
+    let fitness = (destroyed * 30) + (episodeReward * 5) + (livesLeft * 10) + (progress * 50) + (stepsAlive * TIME_W);
+    if (allBricksDestroyed) fitness += 2000;
     totalFitness += fitness;
   }
   return totalFitness / episodes;
 }
 
-// Episodio rápido para logging de bricks
 function episodeDestroyed(policy, cfg, seed, T = 5000) {
   const env = new Arkanoid(cfg, seed >>> 0);
   for (let t = 0; t < T; t++) {
@@ -52,7 +56,9 @@ function episodeDestroyed(policy, cfg, seed, T = 5000) {
   return { destroyed, total: env.bricksAlive.length };
 }
 
-function randRange(rng, lo, hi) { return lo + (hi - lo) * rng(); }
+function randRange(rng, lo, hi) { 
+  return lo + (hi - lo) * rng(); 
+}
 
 export function initPopulation(N, rng, ranges) {
   const pop = [];
@@ -68,18 +74,25 @@ export function tournamentSelect(pop, fits, k, rng) {
   let bestIdx = -1, bestFit = -Infinity;
   for (let i = 0; i < k; i++) {
     const idx = Math.floor(rng() * pop.length);
-    if (fits[idx] > bestFit) { bestFit = fits[idx]; bestIdx = idx; }
+    if (fits[idx] > bestFit) { 
+      bestFit = fits[idx]; 
+      bestIdx = idx; 
+    }
   }
   return pop[bestIdx];
 }
 
 export function onePointCrossover(a, b, pCross, rng, ranges) {
   if (rng() > pCross) return [a, b];
+  
   const point = 1 + Math.floor(rng() * 7);
   const wa = [...a.weights], wb = [...b.weights];
+  
   for (let i = point; i < 8; i++) [wa[i], wb[i]] = [wb[i], wa[i]];
+  
   const dzA = rng() < 0.5 ? a.deadzone : b.deadzone;
   const dzB = rng() < 0.5 ? b.deadzone : a.deadzone;
+  
   return [
     new Policy(wa, clamp(dzA, ranges.dzLo, ranges.dzHi)),
     new Policy(wb, clamp(dzB, ranges.dzLo, ranges.dzHi))
@@ -88,27 +101,35 @@ export function onePointCrossover(a, b, pCross, rng, ranges) {
 
 export function gaussianMutation(ind, pMut, sigmaW, sigmaDZ, rng, ranges) {
   const w = [...ind.weights];
-  for (let i = 0; i < 8; i++) {
+  
+  for (let i = 0; i < w.length; i++) {
     if (rng() < pMut) {
       const u = rng() || 1e-9, v = rng() || 1e-9;
       const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
       w[i] = clamp(w[i] + n * sigmaW, ranges.wLo, ranges.wHi);
     }
   }
+  
   let dz = ind.deadzone;
   if (rng() < pMut) {
     const u = rng() || 1e-9, v = rng() || 1e-9;
     const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     dz = clamp(dz + n * sigmaDZ, ranges.dzLo, ranges.dzHi);
   }
+  
   return new Policy(w, dz);
 }
 
 export async function evolve(opts, hooks = {}) {
-  const { N = 30, G = 60, k = 3, pCross = 0.7, pMut = 0.1, elit = 2, episodes = 2, T = 5000, seed = 1234 } = opts;
+  const { 
+    N = 30, G = 60, k = 3, pCross = 0.7, pMut = 0.1, 
+    elit = 2, episodes = 2, T = 5000, seed = 1234 
+  } = opts;
 
   const rng = mulberry32(seed);
-  const cfg = new ArkanoidConfig(); cfg.horizonT = T; cfg.episodes = episodes;
+  const cfg = new ArkanoidConfig(); 
+  cfg.horizonT = T; 
+  cfg.episodes = episodes;
 
   const ranges = { wLo: -2, wHi: 2, dzLo: 0.0, dzHi: 0.3 };
   const sigmaW = 0.2, sigmaDZ = 0.05;
@@ -122,18 +143,36 @@ export async function evolve(opts, hooks = {}) {
   hooks.onPauseChange && hooks.onPauseChange(() => { paused = !paused; });
 
   for (let gen = 0; gen < G; gen++) {
+    const genStart = performance.now();
     while (paused) await new Promise(r => setTimeout(r, 100));
 
     const fits = [];
+    const times = [];
+    
     for (let i = 0; i < pop.length; i++) {
-      if (i % 5 === 0) await new Promise(r => setTimeout(r, 0)); // ceder UI
+      if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+      
+      const startTime = performance.now();
       const fit = evaluate(pop[i], cfg, (seed + gen * 1000 + i) >>> 0, episodes, T);
+      const endTime = performance.now();
+      
       fits.push(fit);
+      times.push(endTime - startTime);
     }
 
+    const worstFit = Math.min(...fits);
+    const genMs = performance.now() - genStart;
+
     let bestIdx = 0, sum = 0;
-    for (let i = 0; i < fits.length; i++) { if (fits[i] > fits[bestIdx]) bestIdx = i; sum += fits[i]; }
+    for (let i = 0; i < fits.length; i++) { 
+      if (fits[i] > fits[bestIdx]) bestIdx = i; 
+      sum += fits[i]; 
+    }
+    
     const bestFit = fits[bestIdx], avgFit = sum / fits.length, bestInd = pop[bestIdx];
+    const timeMin = Math.min(...times);
+    const timeAvg = times.reduce((a, b) => a + b, 0) / times.length;
+    const timeMax = Math.max(...times);
 
     let isNewGlobal = false;
     if (bestFit > globalBestFit) {
@@ -145,36 +184,50 @@ export async function evolve(opts, hooks = {}) {
     }
 
     const { destroyed, total } = episodeDestroyed(bestInd, cfg, (seed + gen * 1000 + bestIdx) >>> 0, T);
-
     history.push({ gen, best: bestFit, avg: avgFit });
 
     hooks.onGen && hooks.onGen({
-      gen, best: bestFit, avg: avgFit,
-      bestInd, bestIdx,
+      gen, best: bestFit, avg: avgFit, worst: worstFit, genMs,
+      timeMin, timeAvg, timeMax,
       destroyed, totalBricks: total,
-      // Global tracking
       isNewGlobal,
       globalBest, globalBestFit, globalBestGen, globalBestIdx,
-      globalEvalSeed: (seed + gen * 1000 + bestIdx) >>> 0
+      globalEvalSeed: (seed + gen * 1000 + bestIdx) >>> 0,
+      bestInd, bestIdx
     });
 
+    // Elitism + new population
     const nextPop = [];
     const sorted = [...fits.keys()].sort((a, b) => fits[b] - fits[a]);
-    for (let e = 0; e < elit; e++) nextPop.push(new Policy(pop[sorted[e]].weights, pop[sorted[e]].deadzone));
+    for (let e = 0; e < elit; e++) {
+      nextPop.push(new Policy(pop[sorted[e]].weights, pop[sorted[e]].deadzone));
+    }
 
     while (nextPop.length < N) {
-      const p1 = tournamentSelect(pop, fits, k, rng), p2 = tournamentSelect(pop, fits, k, rng);
+      const p1 = tournamentSelect(pop, fits, k, rng);
+      const p2 = tournamentSelect(pop, fits, k, rng);
       const [c1, c2] = onePointCrossover(p1, p2, pCross, rng, ranges);
+      
       nextPop.push(gaussianMutation(c1, pMut, sigmaW, sigmaDZ, rng, ranges));
-      if (nextPop.length < N) nextPop.push(gaussianMutation(c2, pMut, sigmaW, sigmaDZ, rng, ranges));
+      if (nextPop.length < N) {
+        nextPop.push(gaussianMutation(c2, pMut, sigmaW, sigmaDZ, rng, ranges));
+      }
     }
 
     pop = nextPop;
     await new Promise(r => setTimeout(r, 0));
   }
 
-  const result = { best: globalBest, bestFit: globalBestFit, history, cfg, seed, opts,
-                   globalBestGen, globalBestIdx };
+  const result = { 
+    best: globalBest, 
+    bestFit: globalBestFit, 
+    history, 
+    cfg, 
+    seed,
+    globalBestGen, 
+    globalBestIdx 
+  };
+  
   hooks.onDone && hooks.onDone(result);
   return result;
 }
