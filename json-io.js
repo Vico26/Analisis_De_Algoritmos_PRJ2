@@ -64,7 +64,7 @@ export function initRun(params, metaExtra = {}) {
  *  - params: los mismos usados para correr el GA (para reproducibilidad).
  *  - serialize: función opcional (policy -> {genotype, policy}) si quieres persistirlos.
  */
-export function onGen(payload, { params, serialize } = {}) {
+export function onGen(payload, { params = {}, serialize } = {}) {
   if (!runId) return;
 
   const {
@@ -87,15 +87,26 @@ export function onGen(payload, { params, serialize } = {}) {
   });
 
   if (isNewGlobal) {
-    // Por defecto no serializamos instancias (se quedan en null).
-    let genotype = null, policy = null;
+    // Genotipo por defecto: siempre guardamos pesos + deadzone
+    let genotype = {
+      weights: [...(globalBest?.weights ?? bestInd.weights)],
+      deadzone: globalBest?.deadzone ?? bestInd.deadzone
+    };
+
+    // Policy serializada opcionalmente
+    let policy = null;
+
     if (typeof serialize === 'function') {
       try {
         const s = serialize(globalBest ?? bestInd);
-        genotype = s?.genotype ?? null;
-        policy = s?.policy ?? null;
-      } catch { /* intencional: no romper por serialización */ }
+        // Si serialize devuelve algo, solo sobreescribimos si viene definido
+        if (s?.genotype) genotype = s.genotype;
+        if (s?.policy) policy = s.policy;
+      } catch {
+        // intencional: no romper por serialización
+      }
     }
+
     bestSnapshot = {
       gen: globalBestGen ?? gen,
       fitness: n6(globalBestFit ?? best),
@@ -104,6 +115,7 @@ export function onGen(payload, { params, serialize } = {}) {
       genotype,
       policy
     };
+
     saveJSON('best.json', bestSnapshot, 2);
   }
 }

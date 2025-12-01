@@ -1,26 +1,27 @@
-// /arkanoid-ga/ga.js
 import { Arkanoid, ArkanoidConfig, mulberry32, clamp } from './game.js';
 
 const TIME_W = 0.05;
 
-export class Policy {
+export class Policy {//pesos y deadzone
   constructor(weights, deadzone) {
     this.weights = weights.slice(0, 8);
     this.deadzone = deadzone;
   }
   
-  act(features) {
+  act(features) {//características del entorno
     let y = 0;
-    for (let i = 0; i < 8; i++) y += this.weights[i] * features[i];
-    if (Math.abs(y) <= this.deadzone) return 0;
+    for (let i = 0; i < 8; i++) 
+      y += this.weights[i] * features[i];
+    if (Math.abs(y) <= this.deadzone) 
+      return 0;
     return y > 0 ? 1 : -1;
   }
 }
 
-export function evaluate(policy, cfg, seed, episodes = 2, T = 5000) {
+export function evaluate(policy, config, seed, episodes = 2, T = 5000) {//evaluar la política
   let totalFitness = 0;
   for (let ep = 0; ep < episodes; ep++) {
-    const env = new Arkanoid(cfg, (seed + ep * 1000) >>> 0);
+    const env = new Arkanoid(config, (seed + ep * 1000) >>> 0);
     let episodeReward = 0;
     let stepsAlive = 0;
     
@@ -33,20 +34,29 @@ export function evaluate(policy, cfg, seed, episodes = 2, T = 5000) {
     }
     
     const destroyed = env.bricksAlive.filter(b => !b).length;
+
     const totalBricks = env.bricksAlive.length;
+
     const livesLeft = env.lives;
+
     const progress = destroyed / totalBricks;
+
     const allBricksDestroyed = destroyed === totalBricks;
 
-    let fitness = (destroyed * 30) + (episodeReward * 5) + (livesLeft * 10) + (progress * 50) + (stepsAlive * TIME_W);
+    let fitness = (destroyed * 30) + 
+        (episodeReward * 5) + 
+        (livesLeft * 10) + 
+        (progress * 50) + 
+        (stepsAlive * TIME_W);
+
     if (allBricksDestroyed) fitness += 2000;
     totalFitness += fitness;
   }
   return totalFitness / episodes;
 }
 
-function episodeDestroyed(policy, cfg, seed, T = 5000) {
-  const env = new Arkanoid(cfg, seed >>> 0);
+function episodeDestroyed(policy, config, seed, T = 5000) {//número de ladrillos destruidos en un episodio
+  const env = new Arkanoid(config, seed >>> 0);
   for (let t = 0; t < T; t++) {
     const action = policy.act(env.observe());
     const { done } = env.step(action);
@@ -127,9 +137,9 @@ export async function evolve(opts, hooks = {}) {
   } = opts;
 
   const rng = mulberry32(seed);
-  const cfg = new ArkanoidConfig(); 
-  cfg.horizonT = T; 
-  cfg.episodes = episodes;
+  const config = new ArkanoidConfig(); 
+  config.horizonT = T; 
+  config.episodes = episodes;
 
   const ranges = { wLo: -2, wHi: 2, dzLo: 0.0, dzHi: 0.3 };
   const sigmaW = 0.2, sigmaDZ = 0.05;
@@ -153,7 +163,7 @@ export async function evolve(opts, hooks = {}) {
       if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
       
       const startTime = performance.now();
-      const fit = evaluate(pop[i], cfg, (seed + gen * 1000 + i) >>> 0, episodes, T);
+      const fit = evaluate(pop[i], config, (seed + gen * 1000 + i) >>> 0, episodes, T);
       const endTime = performance.now();
       
       fits.push(fit);
@@ -183,7 +193,7 @@ export async function evolve(opts, hooks = {}) {
       isNewGlobal = true;
     }
 
-    const { destroyed, total } = episodeDestroyed(bestInd, cfg, (seed + gen * 1000 + bestIdx) >>> 0, T);
+    const { destroyed, total } = episodeDestroyed(bestInd, config, (seed + gen * 1000 + bestIdx) >>> 0, T);
     history.push({ gen, best: bestFit, avg: avgFit });
 
     hooks.onGen && hooks.onGen({
@@ -222,7 +232,7 @@ export async function evolve(opts, hooks = {}) {
     best: globalBest, 
     bestFit: globalBestFit, 
     history, 
-    cfg, 
+    config, 
     seed,
     globalBestGen, 
     globalBestIdx 

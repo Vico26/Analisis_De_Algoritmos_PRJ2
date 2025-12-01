@@ -1,6 +1,4 @@
-// /arkanoid-ga/game.js (SOLO 2 POWER-UPS)
-// /arkanoid-ga/game.js (SOLO 2 POWER-UPS POR PARTIDA)
-export function mulberry32(seed) {
+export function mulberry32(seed) {// Generador de números aleatorios
     return function() {
         seed |= 0; seed = seed + 0x6D2B79F5 | 0;
         let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
@@ -36,35 +34,35 @@ export class ArkanoidConfig {
 
 // Solo 2 tipos de power-ups
 const POWERUP_TYPES = {
-    EXTEND_PADDLE: 0,
-    MULTIBALL: 1
+    EXTEND_PADDLE: 0, // Extiende la paleta
+    MULTIBALL: 1// Crea 2 bolas adicionales
 };
 
-export class Arkanoid {
-    constructor(cfg, seed) {
-        this.cfg = cfg;
+export class Arkanoid { // Juego principal
+    constructor(config, seed) {
+        this.config = config;
         this.rng = mulberry32(seed);
         this.reset();
     }
 
-    reset(seed) {
+    reset(seed) {// Reinicia el juego
         if (seed !== undefined) this.rng = mulberry32(seed);
         
         this.score = 0;
-        this.lives = this.cfg.maxLives;
+        this.lives = this.config.maxLives;
         this.done = false;
         
         // Paddle (tamaño base)
-        this.paddleWidth = this.cfg.paddleWidth;
-        this.paddleX = (this.cfg.width - this.paddleWidth) / 2;
-        this.paddleY = this.cfg.height - 20;
+        this.paddleWidth = this.config.paddleWidth;
+        this.paddleX = (this.config.width - this.paddleWidth) / 2;
+        this.paddleY = this.config.height - 20;
         
         // Ball - velocidad fija
         this.balls = [{
-            x: this.cfg.width / 2,
-            y: this.paddleY - this.cfg.ballSize - 5,
+            x: this.config.width / 2,
+            y: this.paddleY - this.config.ballSize - 5,
             vx: (this.rng() * 2 - 1) || 1.5,
-            vy: -this.cfg.ballSpeed,
+            vy: -this.config.ballSpeed,
             active: true
         }];
         
@@ -86,8 +84,8 @@ export class Arkanoid {
         
         // Bricks
         this.bricksAlive = [];
-        for (let row = 0; row < this.cfg.brickRows; row++) {
-            for (let col = 0; col < this.cfg.brickCols; col++) {
+        for (let row = 0; row < this.config.brickRows; row++) {
+            for (let col = 0; col < this.config.brickCols; col++) {
                 this.bricksAlive.push(true);
             }
         }
@@ -97,22 +95,22 @@ export class Arkanoid {
 
     // Función para mantener velocidad constante
     normalizeBallSpeed(ball) {
-        const speed = this.cfg.ballSpeed;
+        const speed = this.config.ballSpeed;
         const currentSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
         if (currentSpeed > 0) {
-            ball.vx = (ball.vx / currentSpeed) * speed;
-            ball.vy = (ball.vy / currentSpeed) * speed;
+            ball.vx = (ball.vx / currentSpeed) * speed; // Ajustar velocidad
+            ball.vy = (ball.vy / currentSpeed) * speed; 
         }
     }
 
-    observe() {
+    observe() {// Extrae las características del estado actual
         const mainBall = this.balls[0];
         const features = [
-            mainBall.x / this.cfg.width,
-            mainBall.y / this.cfg.height,
+            mainBall.x / this.config.width,
+            mainBall.y / this.config.height,
             mainBall.vx / 5,
             mainBall.vy / 5,
-            this.paddleX / this.cfg.width,
+            this.paddleX / this.config.width,
             0.5, 0.5, 1.0
         ];
 
@@ -120,18 +118,18 @@ export class Arkanoid {
         let nearestX = 0.5;
         let nearestY = 0.5;
         
-        for (let row = 0; row < this.cfg.brickRows; row++) {
-            for (let col = 0; col < this.cfg.brickCols; col++) {
-                const idx = row * this.cfg.brickCols + col;
+        for (let row = 0; row < this.config.brickRows; row++) {// Buscar el ladrillo más cercano
+            for (let col = 0; col < this.config.brickCols; col++) {
+                const idx = row * this.config.brickCols + col;
                 if (this.bricksAlive[idx]) {
-                    const brickX = col * (this.cfg.brickWidth + this.cfg.brickMargin) + this.cfg.brickMargin;
-                    const brickY = row * (this.cfg.brickHeight + this.cfg.brickMargin) + this.cfg.brickMargin + 40;
+                    const brickX = col * (this.config.brickWidth + this.config.brickMargin) + this.config.brickMargin;
+                    const brickY = row * (this.config.brickHeight + this.config.brickMargin) + this.config.brickMargin + 40;
                     
                     const dist = Math.sqrt((mainBall.x - brickX)**2 + (mainBall.y - brickY)**2);
                     if (dist < minDist) {
                         minDist = dist;
-                        nearestX = brickX / this.cfg.width;
-                        nearestY = brickY / this.cfg.height;
+                        nearestX = brickX / this.config.width;
+                        nearestY = brickY / this.config.height;
                     }
                 }
             }
@@ -139,12 +137,12 @@ export class Arkanoid {
         
         features[5] = nearestX;
         features[6] = nearestY;
-        features[7] = Math.min(minDist / this.cfg.width, 1.0);
+        features[7] = Math.min(minDist / this.config.width, 1.0);
         
         return features;
     }
 
-    createPowerUp(x, y) {
+    createPowerUp(x, y) {// Crea un power-up en la posición dada
         // SOLO si no hemos alcanzado el límite de 2 power-ups
         if (this.powerUpsDropped >= this.maxPowerUps) {
             return null;
@@ -156,38 +154,38 @@ export class Arkanoid {
         const type = types[Math.floor(this.rng() * types.length)];
         
         return {
-            x: x + this.cfg.brickWidth / 2 - this.cfg.powerUpSize / 2,
+            x: x + this.config.brickWidth / 2 - this.config.powerUpSize / 2,
             y: y,
             type: type,
-            width: this.cfg.powerUpSize,
-            height: this.cfg.powerUpSize,
+            width: this.config.powerUpSize,
+            height: this.config.powerUpSize,
             active: true
         };
     }
 
-    applyPowerUp(type) {
+    applyPowerUp(type) {// Aplica el efecto del power-up recogido
         switch(type) {
             case POWERUP_TYPES.EXTEND_PADDLE:
                 if (!this.activePowerUps.extendedPaddle) {
-                    this.paddleWidth = this.cfg.paddleWidth * 1.5;
+                    this.paddleWidth = this.config.paddleWidth * 1.5;
                     this.activePowerUps.extendedPaddle = true;
                     setTimeout(() => {
-                        this.paddleWidth = this.cfg.paddleWidth;
+                        this.paddleWidth = this.config.paddleWidth;
                         this.activePowerUps.extendedPaddle = false;
                     }, 10000); // 10 segundos
                 }
                 break;
                 
-            case POWERUP_TYPES.MULTIBALL:
+            case POWERUP_TYPES.MULTIBALL:// Crea 2 bolas adicionales> es decir, el POWER-UP
                 if (!this.activePowerUps.multiball) {
                     this.activePowerUps.multiball = true;
                     // Crear 2 bolas adicionales (total 3)
-                    for (let i = 0; i < 2; i++) {
+                    for (let i = 0; i < 2; i++) {// SOLO 2 bolas adicionales
                         const newBall = {
                             x: this.paddleX + this.paddleWidth / 2,
-                            y: this.paddleY - this.cfg.ballSize - 5,
+                            y: this.paddleY - this.config.ballSize - 5,
                             vx: (this.rng() * 4 - 2) || 2,
-                            vy: -this.cfg.ballSpeed,
+                            vy: -this.config.ballSpeed, // Velocidad fija
                             active: true
                         };
                         this.normalizeBallSpeed(newBall);
@@ -198,33 +196,41 @@ export class Arkanoid {
         }
     }
 
-    step(action) {
+    step(action) {// Realiza un paso del juego con la acción dada
         if (this.done) return { reward: 0, done: true };
 
         let reward = 0;
 
         // Move paddle
         const paddleSpeed = 8;
-        if (action === -1) this.paddleX -= paddleSpeed;
-        if (action === 1) this.paddleX += paddleSpeed;
-        this.paddleX = clamp(this.paddleX, 0, this.cfg.width - this.paddleWidth);
+        if (action === -1) 
+            this.paddleX -= paddleSpeed;
+
+        if (action === 1) 
+            this.paddleX += paddleSpeed;
+
+        this.paddleX = clamp(this.paddleX, 0, this.config.width - this.paddleWidth);
 
         // Mover power-ups cayendo
         this.fallingPowerUps = this.fallingPowerUps.filter(powerUp => {
-            powerUp.y += this.cfg.powerUpSpeed;
+            powerUp.y += this.config.powerUpSpeed;
             
             // Colisión con paddle
-            if (powerUp.y + this.cfg.powerUpSize >= this.paddleY && 
-                powerUp.y <= this.paddleY + this.cfg.paddleHeight &&
-                powerUp.x + this.cfg.powerUpSize >= this.paddleX && 
+            if (powerUp.y + this.config.powerUpSize >= this.paddleY && 
+
+                powerUp.y <= this.paddleY + this.config.paddleHeight &&
+
+                powerUp.x + this.config.powerUpSize >= this.paddleX && 
+
                 powerUp.x <= this.paddleX + this.paddleWidth) {
+
                 this.applyPowerUp(powerUp.type);
                 reward += 0.5;
                 return false;
             }
             
             // Si sale de la pantalla
-            if (powerUp.y > this.cfg.height) return false;
+            if (powerUp.y > this.config.height) return false;
             
             return true;
         });
@@ -242,43 +248,56 @@ export class Arkanoid {
             ball.y += ball.vy;
 
             // Ball-wall collisions
-            if (ball.x <= 0 || ball.x >= this.cfg.width - this.cfg.ballSize) {
+            if (ball.x <= 0 || ball.x >= this.config.width - this.config.ballSize) {
+
                 ball.vx *= -1;
-                ball.x = clamp(ball.x, 0, this.cfg.width - this.cfg.ballSize);
+
+                ball.x = clamp(ball.x, 0, this.config.width - this.config.ballSize);
+
                 this.normalizeBallSpeed(ball);
             }
             if (ball.y <= 0) {
+
                 ball.vy *= -1;
+
                 ball.y = 0;
+
                 this.normalizeBallSpeed(ball);
             }
 
             // Ball-paddle collision
-            if (ball.y + this.cfg.ballSize >= this.paddleY && 
-                ball.y <= this.paddleY + this.cfg.paddleHeight &&
-                ball.x + this.cfg.ballSize >= this.paddleX && 
-                ball.x <= this.paddleX + this.paddleWidth) {
+            if (ball.y + this.config.ballSize >= this.paddleY && 
+
+                ball.y <= this.paddleY + this.config.paddleHeight &&
+
+                ball.x + this.config.ballSize >= this.paddleX && 
+
+                ball.x <= this.paddleX + this.paddleWidth) {// Colisión con la paleta
                 
                 const hitPos = (ball.x - this.paddleX) / this.paddleWidth * 2 - 1;
                 ball.vx = hitPos * 3;
-                ball.vy = -this.cfg.ballSpeed;
+                ball.vy = -this.config.ballSpeed;
                 this.normalizeBallSpeed(ball);
-                ball.y = this.paddleY - this.cfg.ballSize;
+                ball.y = this.paddleY - this.config.ballSize;
                 reward += 0.1;
             }
 
             // Ball-brick collisions
-            for (let row = 0; row < this.cfg.brickRows; row++) {
-                for (let col = 0; col < this.cfg.brickCols; col++) {
-                    const idx = row * this.cfg.brickCols + col;
+            for (let row = 0; row < this.config.brickRows; row++) {
+                for (let col = 0; col < this.config.brickCols; col++) {
+                    const idx = row * this.config.brickCols + col;
                     if (this.bricksAlive[idx]) {
-                        const brickX = col * (this.cfg.brickWidth + this.cfg.brickMargin) + this.cfg.brickMargin;
-                        const brickY = row * (this.cfg.brickHeight + this.cfg.brickMargin) + this.cfg.brickMargin + 40;
+
+                        const brickX = col * (this.config.brickWidth + this.config.brickMargin) + this.config.brickMargin;
+                        const brickY = row * (this.config.brickHeight + this.config.brickMargin) + this.config.brickMargin + 40;
                         
-                        if (ball.x + this.cfg.ballSize > brickX && 
-                            ball.x < brickX + this.cfg.brickWidth &&
-                            ball.y + this.cfg.ballSize > brickY && 
-                            ball.y < brickY + this.cfg.brickHeight) {
+                        if (ball.x + this.config.ballSize > brickX &&// Colisión con ladrillo
+
+                            ball.x < brickX + this.config.brickWidth &&
+
+                            ball.y + this.config.ballSize > brickY && 
+
+                            ball.y < brickY + this.config.brickHeight) {
                             
                             // Destroy brick
                             this.bricksAlive[idx] = false;
@@ -294,10 +313,14 @@ export class Arkanoid {
                             }
                             
                             // Determine bounce direction
-                            const ballCenterX = ball.x + this.cfg.ballSize / 2;
-                            const ballCenterY = ball.y + this.cfg.ballSize / 2;
-                            const brickCenterX = brickX + this.cfg.brickWidth / 2;
-                            const brickCenterY = brickY + this.cfg.brickHeight / 2;
+                            const ballCenterX = ball.x + this.config.ballSize / 2;
+
+                            const ballCenterY = ball.y + this.config.ballSize / 2;
+
+                            const brickCenterX = brickX + this.config.brickWidth / 2;
+
+                            const brickCenterY = brickY + this.config.brickHeight / 2;
+
                             
                             const dx = ballCenterX - brickCenterX;
                             const dy = ballCenterY - brickCenterY;
@@ -313,8 +336,8 @@ export class Arkanoid {
                 }
             }
 
-            // Ball lost
-            if (ball.y >= this.cfg.height) {
+            // Ball out of bounds(se salio de limites xd)
+            if (ball.y >= this.config.height) {
                 ball.active = false;
             }
         }
@@ -322,24 +345,27 @@ export class Arkanoid {
         // Si no quedan bolas activas
         if (activeBalls === 0) {
             this.lives--;
+
             if (this.lives <= 0) {
                 this.done = true;
                 reward -= 2.0;
+
             } else {
                 // Reset solo la bola principal
                 this.balls = [{
-                    x: this.cfg.width / 2,
-                    y: this.paddleY - this.cfg.ballSize - 5,
+                    x: this.config.width / 2,
+                    y: this.paddleY - this.config.ballSize - 5,
                     vx: (this.rng() * 2 - 1) || 1.5,
-                    vy: -this.cfg.ballSpeed,
+                    vy: -this.config.ballSpeed,
                     active: true
                 }];
                 this.normalizeBallSpeed(this.balls[0]);
                 
                 // Limpiar power-ups cayendo y resetear paleta
                 this.fallingPowerUps = [];
-                this.paddleWidth = this.cfg.paddleWidth;
+                this.paddleWidth = this.config.paddleWidth;
                 this.activePowerUps.extendedPaddle = false;
+
                 // NOTA: El contador de power-ups NO se resetea - siguen siendo solo 2 por partida
                 reward -= 1.0;
             }
@@ -347,6 +373,7 @@ export class Arkanoid {
 
         // Check win condition
         const bricksLeft = this.bricksAlive.filter(b => b).length;
+
         if (bricksLeft === 0) {
             this.done = true;
             reward += 5.0;
@@ -355,31 +382,33 @@ export class Arkanoid {
         return { reward, done: this.done };
     }
 
-    render(ctx) {
+    render(ctx) {// Dibuja el estado actual del juego en el contexto dado
         if (!ctx) return;
         
         // Clear canvas
         ctx.fillStyle = '#0b0c10';
-        ctx.fillRect(0, 0, this.cfg.width, this.cfg.height);
+        ctx.fillRect(0, 0, this.config.width, this.config.height);
         
         // Draw paddle
         ctx.fillStyle = this.activePowerUps.extendedPaddle ? '#4ecdc4' : '#e8eaf1';
-        ctx.fillRect(this.paddleX, this.paddleY, this.paddleWidth, this.cfg.paddleHeight);
+        ctx.fillRect(this.paddleX, this.paddleY, this.paddleWidth, this.config.paddleHeight);
         
         // Draw balls
         ctx.fillStyle = '#ffffff';
         this.balls.forEach(ball => {
             if (ball.active) {
-                ctx.fillRect(ball.x, ball.y, this.cfg.ballSize, this.cfg.ballSize);
+                ctx.fillRect(ball.x, ball.y, this.config.ballSize, this.config.ballSize);
             }
         });
         
         // Draw power-ups cayendo
         this.fallingPowerUps.forEach(powerUp => {
-            switch(powerUp.type) {
+
+            switch(powerUp.type) {// Diferenciar tipos de power-ups
                 case POWERUP_TYPES.EXTEND_PADDLE:
                     ctx.fillStyle = '#4ecdc4';
                     break;
+
                 case POWERUP_TYPES.MULTIBALL:
                     ctx.fillStyle = '#ffe66d';
                     break;
@@ -389,6 +418,7 @@ export class Arkanoid {
             ctx.fillStyle = '#000000';
             ctx.font = '8px Arial';
             ctx.textAlign = 'center';
+
             ctx.fillText(
                 powerUp.type === POWERUP_TYPES.EXTEND_PADDLE ? 'E' : 'M',
                 powerUp.x + powerUp.width / 2,
@@ -397,16 +427,17 @@ export class Arkanoid {
         });
         
         // Draw bricks
-        for (let row = 0; row < this.cfg.brickRows; row++) {
-            for (let col = 0; col < this.cfg.brickCols; col++) {
-                const idx = row * this.cfg.brickCols + col;
+        for (let row = 0; row < this.config.brickRows; row++) {
+            for (let col = 0; col < this.config.brickCols; col++) {
+                const idx = row * this.config.brickCols + col;
                 if (this.bricksAlive[idx]) {
-                    const brickX = col * (this.cfg.brickWidth + this.cfg.brickMargin) + this.cfg.brickMargin;
-                    const brickY = row * (this.cfg.brickHeight + this.cfg.brickMargin) + this.cfg.brickMargin + 40;
+                    const brickX = col * (this.config.brickWidth + this.config.brickMargin) + this.config.brickMargin;
+                    
+                    const brickY = row * (this.config.brickHeight + this.config.brickMargin) + this.config.brickMargin + 40;
                     
                     const hue = (row * 30) % 360;
                     ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
-                    ctx.fillRect(brickX, brickY, this.cfg.brickWidth, this.cfg.brickHeight);
+                    ctx.fillRect(brickX, brickY, this.config.brickWidth, this.config.brickHeight);
                 }
             }
         }
@@ -415,13 +446,17 @@ export class Arkanoid {
         ctx.fillStyle = '#ffffff';
         ctx.font = '12px monospace';
         ctx.textAlign = 'left';
+
         ctx.fillText(`Score: ${this.score}`, 10, 20);
-        ctx.fillText(`Lives: ${this.lives}`, this.cfg.width - 60, 20);
+        ctx.fillText(`Lives: ${this.lives}`, this.config.width - 60, 20);
         
         // Draw active power-ups y contador
         let powerUpText = '';
-        if (this.activePowerUps.extendedPaddle) powerUpText += 'BIG ';
-        if (this.activePowerUps.multiball) powerUpText += 'MULTI ';
+        if (this.activePowerUps.extendedPaddle) 
+            powerUpText += 'BIG ';
+
+        if (this.activePowerUps.multiball) 
+            powerUpText += 'MULTI ';
         
         if (powerUpText) {
             ctx.fillText(`Power: ${powerUpText}`, 10, 35);
@@ -429,10 +464,11 @@ export class Arkanoid {
         
         // Draw ball count
         const activeBallCount = this.balls.filter(ball => ball.active).length;
-        ctx.fillText(`Balls: ${activeBallCount}`, this.cfg.width - 100, 35);
+
+        ctx.fillText(`Balls: ${activeBallCount}`, this.config.width - 100, 35);// Contador de bolas activas
         
         // Draw power-ups restantes (nuevo)
         const powerUpsLeft = this.maxPowerUps - this.powerUpsDropped;
-        ctx.fillText(`Power-ups: ${powerUpsLeft}/2`, this.cfg.width / 2 - 50, 20);
+        ctx.fillText(`Power-ups: ${powerUpsLeft}/2`, this.config.width / 2 - 50, 20);
     }
 }
