@@ -66,13 +66,13 @@ function episodeDestroyed(policy, config, seed, T = 5000) {//número de ladrillo
   return { destroyed, total: env.bricksAlive.length };
 }
 
-function randRange(rng, lo, hi) { 
+function randRange(rng, lo, hi) { //número aleatorio en un rango
   return lo + (hi - lo) * rng(); 
 }
 
-export function initPopulation(N, rng, ranges) {
+export function initPopulation(Num, rng, ranges) {
   const pop = [];
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < Num; i++) {
     const w = Array.from({ length: 8 }, () => randRange(rng, ranges.wLo, ranges.wHi));
     const dz = randRange(rng, ranges.dzLo, ranges.dzHi);
     pop.push(new Policy(w, dz));
@@ -80,9 +80,9 @@ export function initPopulation(N, rng, ranges) {
   return pop;
 }
 
-export function tournamentSelect(pop, fits, k, rng) {
+export function tournamentSelect(pop, fits, kit, rng) {
   let bestIdx = -1, bestFit = -Infinity;
-  for (let i = 0; i < k; i++) {
+  for (let i = 0; i < kit; i++) {
     const idx = Math.floor(rng() * pop.length);
     if (fits[idx] > bestFit) { 
       bestFit = fits[idx]; 
@@ -92,16 +92,16 @@ export function tournamentSelect(pop, fits, k, rng) {
   return pop[bestIdx];
 }
 
-export function onePointCrossover(a, b, pCross, rng, ranges) {
-  if (rng() > pCross) return [a, b];
+export function onePointCrossover(partA, partB, pCross, rng, ranges) {
+  if (rng() > pCross) return [partA, partB];
   
   const point = 1 + Math.floor(rng() * 7);
-  const wa = [...a.weights], wb = [...b.weights];
+  const wa = [...partA.weights], wb = [...partB.weights];
   
   for (let i = point; i < 8; i++) [wa[i], wb[i]] = [wb[i], wa[i]];
   
-  const dzA = rng() < 0.5 ? a.deadzone : b.deadzone;
-  const dzB = rng() < 0.5 ? b.deadzone : a.deadzone;
+  const dzA = rng() < 0.5 ? partA.deadzone : partB.deadzone;
+  const dzB = rng() < 0.5 ? partB.deadzone : partA.deadzone;
   
   return [
     new Policy(wa, clamp(dzA, ranges.dzLo, ranges.dzHi)),
@@ -109,30 +109,30 @@ export function onePointCrossover(a, b, pCross, rng, ranges) {
   ];
 }
 
-export function gaussianMutation(ind, pMut, sigmaW, sigmaDZ, rng, ranges) {
-  const w = [...ind.weights];
+export function gaussianMutation(ind, pMut, sigmaW, sigmaDZ, rng, ranges) {//mutación gaussiana
+  const widgets = [...ind.weights];
   
-  for (let i = 0; i < w.length; i++) {
+  for (let i = 0; i < widgets.length; i++) {
     if (rng() < pMut) {
-      const u = rng() || 1e-9, v = rng() || 1e-9;
+      const u = rng() || 1e-9, v = rng() || 1e-9; 
       const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-      w[i] = clamp(w[i] + n * sigmaW, ranges.wLo, ranges.wHi);
+      widgets[i] = clamp(widgets[i] + n * sigmaW, ranges.wLo, ranges.wHi);
     }
   }
   
-  let dz = ind.deadzone;
+  let dz = ind.deadzone;//mutación del deadzone
   if (rng() < pMut) {
     const u = rng() || 1e-9, v = rng() || 1e-9;
     const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     dz = clamp(dz + n * sigmaDZ, ranges.dzLo, ranges.dzHi);
   }
   
-  return new Policy(w, dz);
+  return new Policy(widgets, dz);
 }
 
-export async function evolve(opts, hooks = {}) {
+export async function evolve(opts, hooks = {}) {//función principal de evolución
   const { 
-    N = 30, G = 60, k = 3, pCross = 0.7, pMut = 0.1, 
+    Num = 30, G = 60, k = 3, pCross = 0.7, pMut = 0.1, 
     elit = 2, episodes = 2, T = 5000, seed = 1234 
   } = opts;
 
@@ -144,9 +144,12 @@ export async function evolve(opts, hooks = {}) {
   const ranges = { wLo: -2, wHi: 2, dzLo: 0.0, dzHi: 0.3 };
   const sigmaW = 0.2, sigmaDZ = 0.05;
 
-  let pop = initPopulation(N, rng, ranges);
+  let pop = initPopulation(Num, rng, ranges);
+
   let globalBest = null, globalBestFit = -Infinity;
+
   let globalBestGen = -1, globalBestIdx = -1;
+
   const history = [];
 
   let paused = false;
@@ -180,11 +183,15 @@ export async function evolve(opts, hooks = {}) {
     }
     
     const bestFit = fits[bestIdx], avgFit = sum / fits.length, bestInd = pop[bestIdx];
+
     const timeMin = Math.min(...times);
+
     const timeAvg = times.reduce((a, b) => a + b, 0) / times.length;
+
     const timeMax = Math.max(...times);
 
     let isNewGlobal = false;
+
     if (bestFit > globalBestFit) {
       globalBestFit = bestFit;
       globalBest = new Policy(bestInd.weights, bestInd.deadzone);
@@ -197,11 +204,13 @@ export async function evolve(opts, hooks = {}) {
     history.push({ gen, best: bestFit, avg: avgFit });
 
     hooks.onGen && hooks.onGen({
+
       gen, best: bestFit, avg: avgFit, worst: worstFit, genMs,
       timeMin, timeAvg, timeMax,
       destroyed, totalBricks: total,
       isNewGlobal,
       globalBest, globalBestFit, globalBestGen, globalBestIdx,
+
       globalEvalSeed: (seed + gen * 1000 + bestIdx) >>> 0,
       bestInd, bestIdx
     });
@@ -213,13 +222,13 @@ export async function evolve(opts, hooks = {}) {
       nextPop.push(new Policy(pop[sorted[e]].weights, pop[sorted[e]].deadzone));
     }
 
-    while (nextPop.length < N) {
-      const p1 = tournamentSelect(pop, fits, k, rng);
-      const p2 = tournamentSelect(pop, fits, k, rng);
-      const [c1, c2] = onePointCrossover(p1, p2, pCross, rng, ranges);
+    while (nextPop.length < Num) {
+      const part1 = tournamentSelect(pop, fits, k, rng);
+      const part2 = tournamentSelect(pop, fits, k, rng);
+      const [c1, c2] = onePointCrossover(part1, part2, pCross, rng, ranges);
       
       nextPop.push(gaussianMutation(c1, pMut, sigmaW, sigmaDZ, rng, ranges));
-      if (nextPop.length < N) {
+      if (nextPop.length < Num) {
         nextPop.push(gaussianMutation(c2, pMut, sigmaW, sigmaDZ, rng, ranges));
       }
     }
@@ -228,7 +237,7 @@ export async function evolve(opts, hooks = {}) {
     await new Promise(r => setTimeout(r, 0));
   }
 
-  const result = { 
+  const result = { //resultados finales
     best: globalBest, 
     bestFit: globalBestFit, 
     history, 

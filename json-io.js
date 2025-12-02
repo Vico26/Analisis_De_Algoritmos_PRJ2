@@ -1,7 +1,4 @@
-// filepath: /arkanoid-ga/json-io.js
-// Módulo ESM para exportar config/, logs/, best.json y replay/ 
-
-// ===== Helpers =====
+//Herramientas para guardar y exportar datos JSON/JSONL/CSV/ZIP desde el navegador
 function saveBlob(filename, blob) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -9,30 +6,35 @@ function saveBlob(filename, blob) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 0); // evita fuga de memoria
 }
+// Guarda un objeto como archivo JSON
 export function saveJSON(name, obj, space = 0) {
   saveBlob(name, new Blob([JSON.stringify(obj, null, space)], { type: 'application/json' }));
 }
+// Guarda un texto como archivo de texto plano
 export function saveText(name, text) {
   saveBlob(name, new Blob([text], { type: 'text/plain;charset=utf-8' }));
 }
+// Convierte un array de objetos en JSONL (JSON Lines)
 export function toJSONL(arr) {
   return arr.map(o => JSON.stringify(o)).join('\n') + '\n';
 }
+// Genera un ID de timestamp legible
 export function tsId(d = new Date()) {
   const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-
+          ${p(d.getMinutes())}-${p(d.getSeconds())}`;
 }
+
 const n6 = (v) => (typeof v === 'number' && isFinite(v)) ? +Number(v).toFixed(6) : null;
 const ms2 = (v) => (typeof v === 'number' && isFinite(v)) ? +Number(v).toFixed(2) : null;
 
-// ===== Estado (mantenido solo en este módulo) =====
+//Estado (mantenido solo en este módulo)
 let runId = null;
 let logs = [];
 let bestSnapshot = null;
 let lastConfigObj = null;
-let replaySteps = []; // opcional
+let replaySteps = []; 
 
-// ===== API pública =====
 
 /**
  * Inicializa una corrida y guarda config/run-<id>.json.
@@ -44,7 +46,7 @@ export function initRun(params, metaExtra = {}) {
   bestSnapshot = null;
   replaySteps = [];
 
-  const meta = {
+  const meta = {//metadatos básicos
     name: 'Arkanoid+GA',
     created_at: new Date().toISOString(),
     run_id: runId,
@@ -52,18 +54,11 @@ export function initRun(params, metaExtra = {}) {
     ...metaExtra
   };
 
-  lastConfigObj = { meta, seed: params.seed, params };
+  lastConfigObj = { meta, seed: params.seed, params };//guardar configuración
   saveJSON(`config/run-${runId}.json`, lastConfigObj, 2);
   return runId;
 }
-
-/**
- * Agrega una línea al log por generación y guarda best.json si hay nuevo mejor.
- * @param {object} payload Payload que recibes ya en tu onGen del GA.
- * @param {object} ctx { params, serialize? }
- *  - params: los mismos usados para correr el GA (para reproducibilidad).
- *  - serialize: función opcional (policy -> {genotype, policy}) si quieres persistirlos.
- */
+// Registra datos de una generación; guarda best.json si hay nuevo mejor global.
 export function onGen(payload, { params = {}, serialize } = {}) {
   if (!runId) return;
 
@@ -103,7 +98,7 @@ export function onGen(payload, { params = {}, serialize } = {}) {
         if (s?.genotype) genotype = s.genotype;
         if (s?.policy) policy = s.policy;
       } catch {
-        // intencional: no romper por serialización
+        //no romper por serialización
       }
     }
 
@@ -120,15 +115,13 @@ export function onGen(payload, { params = {}, serialize } = {}) {
   }
 }
 
-/**
- * Finaliza la corrida: descarga logs JSONL y asegura best.json si no hubo "nuevo mejor".
- */
+//Finaliza la corrida: descarga logs JSONL y asegura best.json si no hubo "nuevo mejor". 
 export function onDone({ seed, params }) {
   if (!runId) return;
 
   saveText(`logs/run-${runId}.jsonl`, toJSONL(logs));
 
-  if (!bestSnapshot && logs.length) {
+  if (!bestSnapshot && logs.length) {//guardar best.json si no se guardó antes
     const last = logs[logs.length - 1];
     saveJSON('best.json', {
       gen: last.gen,
@@ -141,24 +134,19 @@ export function onDone({ seed, params }) {
   }
 }
 
-/**
- * Opcional: empuja un paso de replay, por ejemplo { t, obs, action }.
- */
+
+//Empuja un paso de replay, por ejemplo { t, obs, action }.
 export function pushReplay(step) {
   if (step && typeof step === 'object') replaySteps.push(step);
 }
 
-/**
- * Opcional: exporta replay como replay/run-<id>.json
- */
+ //Exporta replay como replay/run-<id>.json
 export function exportReplay(name = `replay/run-${runId || tsId()}.json`) {
   const obj = { created_at: new Date().toISOString(), run_id: runId, steps: replaySteps.slice() };
   saveJSON(name, obj, 2);
 }
 
-/**
- * Opcional: también CSV para abrir en Excel.
- */
+//CSV para abrir en Excel.
 export function exportCSV() {
   if (!logs.length) return;
   const cols = Array.from(new Set(logs.flatMap(o => Object.keys(o))));
@@ -168,10 +156,8 @@ export function exportCSV() {
   saveText(`logs/run-${runId}.csv`, [head, ...rows].join('\n'));
 }
 
-/**
- * Opcional: ZIP de todo (config, logs JSONL/CSV, best.json, replay si hay).
- * Carga JSZip y FileSaver por import dinámico desde CDN (sin npm).
- */
+ //Opcional: ZIP de todo (config, logs JSONL/CSV, best.json, replay si hay).
+ //Carga JSZip y FileSaver por import dinámico desde CDN (sin npm).
 export async function exportZipAll({ includeCSV = true, includeReplay = true } = {}) {
   if (!runId) return;
 
@@ -182,7 +168,7 @@ export async function exportZipAll({ includeCSV = true, includeReplay = true } =
 
   const zip = new JSZip();
 
-  if (lastConfigObj) {
+  if (lastConfigObj) {//configuración
     zip.file(`config/run-${runId}.json`, JSON.stringify(lastConfigObj, null, 2));
   }
   if (logs.length) {
@@ -195,10 +181,10 @@ export async function exportZipAll({ includeCSV = true, includeReplay = true } =
       zip.file(`logs/run-${runId}.csv`, [head, ...rows].join('\n'));
     }
   }
-  if (bestSnapshot) {
+  if (bestSnapshot) {//best.json
     zip.file('best.json', JSON.stringify(bestSnapshot, null, 2));
   }
-  if (includeReplay && replaySteps.length) {
+  if (includeReplay && replaySteps.length) {//replay
     zip.file(`replay/run-${runId}.json`, JSON.stringify({ run_id: runId, steps: replaySteps }, null, 2));
   }
 
@@ -206,7 +192,7 @@ export async function exportZipAll({ includeCSV = true, includeReplay = true } =
   saveAs(blob, `run-${runId}.zip`);
 }
 
-
+//Obtiene el estado actual para guardado o inspección externa.
 export function getState() {
   return { runId, logs, bestSnapshot, lastConfigObj, replaySteps };
 }

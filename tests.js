@@ -1,8 +1,7 @@
-// /arkanoid-ga/tests.js
 import { Arkanoid, ArkanoidConfig } from './game.js';
 import { evolve, Policy } from './ga.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {//ui y control de la aplicación
   const $ = id => document.getElementById(id);
   const ui = {
     btnStart: $('btnStart'),
@@ -14,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mBest: $('mBest'),
     mAvg: $('mAvg'),
     log: $('log'),
-    cv: $('cv'),
+    cv: $('cv'), 
     hud: $('hud'),
     inN: $('inN'),
     inG: $('inG'),
@@ -27,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inSeed: $('inSeed'),
   };
 
-  let timePanel = $('timePanel');
+  let timePanel = $('timePanel');//panel de tiempos
   if (!timePanel && ui.cv) {
     timePanel = document.createElement('div');
     timePanel.id = 'timePanel';
@@ -60,29 +59,35 @@ document.addEventListener('DOMContentLoaded', () => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 0);
   }
-  function saveJSON(name, obj, space = 0) {
+
+  function saveJSON(name, obj, space = 0) {//guardar json
     saveBlob(name, new Blob([JSON.stringify(obj, null, space)], { type: 'application/json' }));
   }
-  function saveText(name, text) {
+
+  function saveText(name, text) {//guardar texto
     saveBlob(name, new Blob([text], { type: 'text/plain;charset=utf-8' }));
   }
-  function toJSONL(arr) {
+
+  function toJSONL(arr) {//convertir a jsonl
     return arr.map(o => JSON.stringify(o)).join('\n') + '\n';
   }
-  function tsId(d = new Date()) {
+  function tsId(d = new Date()) { //timestamp id
     const p = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
-  }
+
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-
+              ${p(d.getDate())}_${p(d.getHours())}-
+              ${p(d.getMinutes())}-${p(d.getSeconds())}`;}
+
   // estado io (para los archivos)
   let __runId = null, __logs = [], __bestSnapshot = null;
 
-  function logLine(s) {
+  function logLine(s) {//log en el área de texto
     if (!ui.log) return;
     ui.log.textContent += s + "\n";
     ui.log.scrollTop = ui.log.scrollHeight;
   }
 
-  function speed() {
+  function speed() {//velocidad del demo
     return Math.max(1, parseInt(ui.selSpeed?.value || '1', 10));
   }
 
@@ -113,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pending: null
   };
 
-  if (ui.chkAutoDemo) {
+  if (ui.chkAutoDemo) {//demo automático
     ui.chkAutoDemo.addEventListener('change', () => {
       autoDemo = ui.chkAutoDemo.checked;
       logLine(`Demo automático: ${autoDemo ? 'ON' : 'OFF'}`);
@@ -121,23 +126,23 @@ document.addEventListener('DOMContentLoaded', () => {
     autoDemo = ui.chkAutoDemo.checked;
   }
 
-  function bricksLeft(env) {
+  function bricksLeft(env) {//ladrillos restantes
     return env?.bricksAlive?.filter(b => b).length ?? 0;
   }
 
-  function runDemo(policy, label, seed) {
+  function runDemo(policy, label, seed) {//ejecutar demo
     if (!ui.cv) return;
 
     stopDemo();
 
     demoPolicy = policy;
     demoLabel = label;
-    const cfg = new ArkanoidConfig();
-    demoEnv = new Arkanoid(cfg, seed >>> 0);
-    const ctx = ui.cv.getContext('2d');
+    const cfg = new ArkanoidConfig();//configuración del juego
+    demoEnv = new Arkanoid(cfg, seed >>> 0);//entorno del juego
+    const ctx = ui.cv.getContext('2d');//contexto del canvas
     demoRunning = true;
 
-    function frame() {
+    function frame() {//bucle del demo
       if (!demoRunning) return;
 
       for (let i = 0; i < speed(); i++) {
@@ -160,8 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       demoEnv.render(ctx);
 
-      if (ui.hud) {
-        ui.hud.textContent = `${demoLabel} | Score=${demoEnv.score} | Lives=${demoEnv.lives} | Bricks=${bricksLeft(demoEnv)}`;
+      if (ui.hud) {//actualizar hud
+        ui.hud.textContent = `${demoLabel} | Score=${demoEnv.score} 
+        | Lives=${demoEnv.lives} | Bricks=${bricksLeft(demoEnv)}`;
       }
 
       demoRAF = requestAnimationFrame(frame);
@@ -170,12 +176,12 @@ document.addEventListener('DOMContentLoaded', () => {
     frame();
   }
 
-  function stopDemo() {
+  function stopDemo() {//detener demo
     demoRunning = false;
     cancelAnimationFrame(demoRAF);
   }
 
-  if (ui.btnStart) {
+  if (ui.btnStart) {//botón de inicio
     ui.btnStart.addEventListener('click', async () => {
       if (running) return;
 
@@ -191,8 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (valAvgTime) valAvgTime.textContent = "-";
       if (valWorstTime) valWorstTime.textContent = "-";
 
-      logLine(`=== INICIANDO AG ===`);
-      logLine(`Params: N=${opts.N} G=${opts.G} k=${opts.k} pc=${opts.pCross} pm=${opts.pMut} ep=${opts.episodes} T=${opts.T}`);
+      logLine(`=== INICIANDO AG ===`);//inicio del ga
+      logLine(`Params: N=${opts.N} G=${opts.G} k=${opts.k} pc=${opts.pCross} 
+              pm=${opts.pMut} ep=${opts.episodes} T=${opts.T}`);//parámetros
 
       // config (solo para poder replicar)
       __runId = tsId();
@@ -204,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         run_id: __runId,
         browser: navigator.userAgent
       };
-      saveJSON(`config/run-${__runId}.json`, { meta, seed: opts.seed, params: opts }, 2);
+      saveJSON(`config/run-${__runId}.json`, { meta, seed: opts.seed, params: opts }, 2);//guardar configuración
 
       try {
         await evolve(opts, {
@@ -221,7 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (valAvgTime) valAvgTime.textContent = `${timeAvg.toFixed(1)} ms`;
             if (valWorstTime) valWorstTime.textContent = `${timeMax.toFixed(1)} ms`;
 
-            logLine(`Gen ${gen}: mejor=${best.toFixed(2)} peor=${worst.toFixed(2)} media=${avg.toFixed(2)} tiempo=${genMs.toFixed(1)}ms bricks=${destroyed}/${totalBricks}`);
+            logLine(`Gen ${gen}: mejor=${best.toFixed(2)} 
+            peor=${worst.toFixed(2)} media=${avg.toFixed(2)} 
+            tiempo=${genMs.toFixed(1)}ms bricks=${destroyed}/${totalBricks}`);
 
             if (isNewGlobal) {
               latest.globalBest = globalBest;
@@ -249,8 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // log por gen + best.json (solo archivos)
-            const n = v => (typeof v === 'number' && isFinite(v)) ? +Number(v).toFixed(6) : null;
-            const ms = v => (typeof v === 'number' && isFinite(v)) ? +Number(v).toFixed(2) : null;
+            const n = v => (typeof v === 'number' && isFinite(v)) ? 
+            +Number(v).toFixed(6) : null;
+
+            const ms = v => (typeof v === 'number' && isFinite(v)) ?
+             +Number(v).toFixed(2) : null;
 
             __logs.push({
               run: __runId, gen,
@@ -261,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
               globalBestFit: n(globalBestFit), globalBestGen
             });
 
-            if (isNewGlobal) {
+            if (isNewGlobal) {//guardar best.json
               __bestSnapshot = {
                 gen: globalBestGen,
                 fitness: n(globalBestFit ?? best),
@@ -274,11 +286,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           },
 
-          onDone: ({ best, bestFit, history, seed }) => {
+          onDone: ({ best, bestFit, history, seed }) => {//final del ga
             logLine(`=== EVOLUCIÓN COMPLETADA ===`);
             logLine(`Mejor fitness global: ${bestFit.toFixed(2)}`);
 
-            if (autoDemo && best && !demoRunning) {
+            if (autoDemo && best && !demoRunning) {//demo automático
               runDemo(best, `GLOBAL g${history.at(-1)?.gen ?? '?'}`, seed >>> 0);
             }
 
@@ -299,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             running = false;
           }
         });
-      } catch (e) {
+      } catch (e) {//manejo de errores
         console.error(e);
         logLine(`ERROR: ${e?.message || e}`);
         running = false;
@@ -307,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (ui.btnPause) {
+  if (ui.btnPause) {//botón de pausa
     ui.btnPause.addEventListener('click', () => {
       if (typeof pausedToggleFn === 'function') {
         pausedToggleFn();
@@ -318,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (ui.btnDemo) {
+  if (ui.btnDemo) {//botón de demo
     ui.btnDemo.addEventListener('click', () => {
       if (!latest.globalBest) {
         logLine('Ejecuta el GA primero');
@@ -328,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const simplePolicy = new Policy([0.5, -0.3, 0.2, -0.1, 0.6, 0, 0.1, 0.2], 0.15);
+  const simplePolicy = new Policy([0.5, -0.3, 0.2, -0.1, 0.6, 0, 0.1, 0.2], 0.15);//política simple de demostración
   runDemo(simplePolicy, 'INICIAL', 1234);
   logLine('Sistema listo - Haz clic en Start GA');
 });
